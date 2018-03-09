@@ -1,21 +1,27 @@
 import time
 from modules import cbpi
 from modules.core.controller import KettleController
-from modules.core.controller import KettleController
 from modules.core.props import Property
+
+# Property descriptions
+kp_description = "The proportional term, also known as kp, is the action of PID in response to each unit of error. kp dictates the aggressiveness of action."
+ki_description = "The integral term, also known as ki, is the action of the PID in response to cumulative error in the system. ki is used primarily to reduce steady state error, but also factors into aggressivness of action."
+kd_description = "The derivative term, also known as kd, is the action of the PID in response to the rate of change of the error. kd is used primarily to reduce overshoot."
+integrator_max_description = "An integrator maximum is used to reduce integrator windup. Integrator windup is the rapid accumulation of error in the integrator from sudden changes in setpoints. This occurs when the calculated action exceeds output capabilities."
+update_interval_description = "This is the length of time in seconds between recalculation of actor output with the PID algorithm."
 
 @cbpi.controller
 class CascadePID(KettleController):
     a_inner_sensor = Property.Sensor(label="Inner loop sensor")
-    b_inner_kp = Property.Number("Inner loop proportional term", True, 5.0)
-    c_inner_ki = Property.Number("Inner loop integral term", True, 0.25)
-    d_inner_kd = Property.Number("Inner loop derivative term", True, 0.0)
-    e_inner_integrator_max = Property.Number("Inner loop integrator max", True, 15.0)
-    f_outer_kp = Property.Number("Outer loop proportional term", True, 0.0)
-    g_outer_ki = Property.Number("Outer loop integral term", True, 2.0)
-    h_outer_kd = Property.Number("Outer loop derivative term", True, 1.0)
-    i_outer_integrator_max = Property.Number("Outer loop integrator max", True, 15.0)
-    j_update_interval = Property.Number("Update interval", True, 2.5)
+    b_inner_kp = Property.Number("Inner loop proportional term", True, 5.0, description=kp_description)
+    c_inner_ki = Property.Number("Inner loop integral term", True, 0.25, description=ki_description)
+    d_inner_kd = Property.Number("Inner loop derivative term", True, 0.0, description=kd_description)
+    e_inner_integrator_max = Property.Number("Inner loop integrator max", True, 15.0, description=integrator_max_description)
+    f_outer_kp = Property.Number("Outer loop proportional term", True, 0.0, description=kp_description)
+    g_outer_ki = Property.Number("Outer loop integral term", True, 2.0, description=ki_description)
+    h_outer_kd = Property.Number("Outer loop derivative term", True, 1.0, description=kd_description)
+    i_outer_integrator_max = Property.Number("Outer loop integrator max", True, 15.0, description=integrator_max_description)
+    j_update_interval = Property.Number("Update interval", True, 2.5, description=update_interval_description)
 
     def stop(self):
         self.heater_off()
@@ -91,13 +97,13 @@ class CascadePID(KettleController):
 
 @cbpi.controller
 class SinglePID(KettleController):
-    a_kp = Property.Number("Proportional term", True, 10.0)
-    b_ki = Property.Number("Integral term", True, 2.0)
-    c_kd = Property.Number("Derivative term", True, 1.0)
+    a_kp = Property.Number("Proportional term", True, 10.0, description=kp_description)
+    b_ki = Property.Number("Integral term", True, 2.0, description=ki_description)
+    c_kd = Property.Number("Derivative term", True, 1.0, description=kd_description)
     d_output_max = Property.Number("Output max", True, 100.0)
     e_output_min = Property.Number("Output min", True, 0.0)
-    f_integrator_max = Property.Number("Integrator max", True, 15.0)
-    g_update_interval = Property.Number("Update interval", True, 2.5)
+    f_integrator_max = Property.Number("Integrator max", True, 15.0, description=integrator_max_description)
+    g_update_interval = Property.Number("Update interval", True, 2.5, description=update_interval_description)
 
     def stop(self):
         self.heater_off()
@@ -166,7 +172,7 @@ class PID(object):
         self.integrator = 0.0
 
     def update(self, current, target):
-        # Initialization interation
+        # Initialization iteration
         if self.last_time == 0.0:
             self.last_time = time.time()
             current_error = target - current
@@ -177,10 +183,10 @@ class PID(object):
             # Return output
             return max(min(self.kp * current_error, self.output_max), self.output_min)
 
-        # Regular interation
+        # Regular iteration
         else:
 
-            # Calculate duration of interation
+            # Calculate duration of iteration
             current_time = time.time()
             iteration_time = current_time - self.last_time
             self.last_time = current_time

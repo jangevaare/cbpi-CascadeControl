@@ -1,16 +1,23 @@
 # cbpi-CascadePID
 ## Introduction
-This CraftBeerPi 3.0 plugin provides a new KettleController type called CascadePID. The main purpose of this plugin is for sophisticated mash temperature control within popular RIMS and HERMS-based breweries, however it may have additional purposes.
+This CraftBeerPi 3.0 plugin provides a new KettleController type called CascadePID. The main purpose of this plugin is for sophisticated mash temperature control within popular RIMS and HERMS-based breweries, however it may have other purposes in your brewery.
 
-Use of this plugin is technical, and it is not recommended for beginners.
+A SinglePID KettleController is also provided in this plugin.
+
+## Typical Usage
+Most brewers with HERMS or RIMS based breweries use trial and error to determine an appropriate differential between their mash temperature and hot liquor tank or RIMS tube temperature in order to maintain the set point. Especially for those who brew in non-temperature controlled environments, this can be inexact and tedious.
+
+With a properly tuned cascade PID, this problem disappears. Your hot liquor tank or RIMS set point will automatically adjust on the basis of your mash tun set point and mash tun current temperature. Implicit in this tuning is the desired aggressiveness of action, so for those who wish to have *gentle* mash temperature control, they can still do that.
+
+The potential benefit of cascade PID goes further. Many brewers with HERMS are told that step mashing is futile in their system. A properly tuned cascade PID unlocks this potential.
 
 ## License
 This plugin is open source, and has an MIT License. Please read the included license if you are not already familiar with it.
 
 ## Safety and Disclaimers
-* The most effective way of improving temperature control in your RIMS or HERMS brewery is not by using this plugin, but rather by reducing lag time within the system. This is accomplished by proper mixing and recirculation conditions.
+* The most important method of improving temperature control in your HERMS or RIMS based brewery is by reducing lag time within the system. This is accomplished by proper mixing and recirculation conditions.
 * This plugin is intended only for those knowledgable and comfortable with control systems.
-* Improper tuning could lead to unpredictable results with this plugin. The user must closely monitor their brewery at all times of operation, especially during the tuning process.
+* Improper tuning could lead to unpredictable results with this plugin. The user must closely monitor their brewery at all times of operation, especially during the tuning process. Conditions under tuning should mimic those during brewing, including pump speeds, volume of liquid, presence/absence of temperature stratification.
 * This plugin should never be used in the absence of proper safety features, especially those related to element dry firing, properly rated hardware components, and GFCI protection.
 
 ## Control Loops and Cascade Control

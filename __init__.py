@@ -1,13 +1,14 @@
+# -*- coding: utf-8 -*-
 import time
 from modules import cbpi
 from modules.core.controller import KettleController
 from modules.core.props import Property
 
 # Property descriptions
-kp_description = "The proportional term, also known as kp, is the action of PID in response to each unit of error. kp dictates the aggressiveness of action."
-ki_description = "The integral term, also known as ki, is the action of the PID in response to cumulative error in the system. ki is used primarily to reduce steady state error, but also factors into aggressivness of action."
-kd_description = "The derivative term, also known as kd, is the action of the PID in response to the rate of change of the error. kd is used primarily to reduce overshoot."
-integrator_max_description = "An integrator maximum is used to reduce integrator windup. Integrator windup is the rapid accumulation of error in the integrator from sudden changes in setpoints. This occurs when the calculated action exceeds output capabilities."
+kp_description = "The proportional term, also known as kp, is the action of PID in response to each unit of error. kp dictates the aggressiveness of action. \nThe units of kp are output / process variable (e.g. watts / °C)"
+ki_description = "The integral term, also known as ki, is the action of the PID in response to cumulative error in the system. ki is used primarily to reduce steady state error, but also factors into aggressivness of action. \nThe units of ki are output/(process variable • time) (e.g. watts / (°C • seconds))"
+kd_description = "The derivative term, also known as kd, is the action of the PID in response to the rate of change of the error. kd is used primarily to reduce overshoot. \nThe units are of output / process variable / time (e.g. watts /°C / seconds)"
+integrator_max_description = "An integrator maximum is a simple method used to reduce integrator windup. Integrator windup is the rapid accumulation of error in the integrator from sudden changes in setpoints. This occurs when the calculated action exceeds output capabilities. Excessive overshoot can occur if integrator windup is not accounted for. \nThe integrator is in units of process variable • time (e.g. °C • seconds)."
 update_interval_description = "This is the length of time in seconds between recalculation of actor output with the PID algorithm."
 
 @cbpi.controller

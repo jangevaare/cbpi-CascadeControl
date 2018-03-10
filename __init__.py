@@ -10,6 +10,7 @@ ki_description = "The integral term, also known as ki, is the action of the PID 
 kd_description = "The derivative term, also known as kd, is the action of the PID in response to the rate of change of the error. kd is used primarily to reduce overshoot. \nThe units are of output / process variable / time (e.g. watts /°C / seconds)"
 integrator_max_description = "An integrator maximum is a simple method used to reduce integrator windup. Integrator windup is the rapid accumulation of error in the integrator from sudden changes in setpoints. This occurs when the calculated action exceeds output capabilities. Excessive overshoot can occur if integrator windup is not accounted for. \nThe integrator is in units of process variable • time (e.g. °C • seconds)."
 update_interval_description = "This is the length of time in seconds between recalculation of actor output with the PID algorithm."
+verbose_description = "This option prints information from PID loop to console. This is useful especially during the tuning process."
 
 @cbpi.controller
 class CascadePID(KettleController):
@@ -18,32 +19,23 @@ class CascadePID(KettleController):
     c_inner_ki = Property.Number("Inner loop integral term", True, 0.25, description=ki_description)
     d_inner_kd = Property.Number("Inner loop derivative term", True, 0.0, description=kd_description)
     e_inner_integrator_max = Property.Number("Inner loop integrator max", True, 15.0, description=integrator_max_description)
+    e_inner_integrator_initial = Property.Number("Inner loop integrator initial value", True, 0.0)
     f_outer_kp = Property.Number("Outer loop proportional term", True, 0.0, description=kp_description)
     g_outer_ki = Property.Number("Outer loop integral term", True, 2.0, description=ki_description)
     h_outer_kd = Property.Number("Outer loop derivative term", True, 1.0, description=kd_description)
     i_outer_integrator_max = Property.Number("Outer loop integrator max", True, 15.0, description=integrator_max_description)
+    i_outer_integrator_initial = Property.Number("Outer loop integrator initial value", True, 0.0)
     j_update_interval = Property.Number("Update interval", True, 2.5, description=update_interval_description)
+    k_verbose = Property.Select("Verbose mode", ["True", "False"], description=verbose_description)
 
     def stop(self):
         self.heater_off()
         super(KettleController, self).stop()
 
     def run(self):
-        # Error check
-        if float(self.j_update_interval) <= 0.0:
-            self.notify("PID Error", "Update interval must be positive", timeout=None, type="danger")
-            raise ValueError("PID - Update interval must be positive")
-        if float(self.e_inner_integrator_max) < 0.0:
-            self.notify("PID Error", "Inner loop max integrator must be >= 0", timeout=None, type="danger")
-            raise ValueError("PID - Inner loop max integrator must be >= 0")
-        if float(self.i_outer_integrator_max) < 0.0:
-            self.notify("PID Error", "Outer loop max integrator must be >= 0", timeout=None, type="danger")
-            raise ValueError("PID - Outer loop max integrator must be >= 0")
-        elif not isinstance(self.a_inner_sensor, unicode):
+        if not isinstance(self.a_inner_sensor, unicode):
             self.notify("PID Error", "An inner sensor must be selected", timeout=None, type="danger")
             raise UserWarning("PID - An inner sensor must be selected")
-        else:
-            self.heater_on(0.0)
 
         # Get inner sensor as an integer
         inner_sensor = int(self.a_inner_sensor)
@@ -53,19 +45,41 @@ class CascadePID(KettleController):
         inner_ki = float(self.c_inner_ki)
         inner_kd = float(self.d_inner_kd)
         inner_integrator_max = float(self.e_inner_integrator_max)
+        inner_integrator_initial = float(self.e_inner_integrator_initial)
         outer_kp = float(self.f_outer_kp)
         outer_ki = float(self.g_outer_ki)
         outer_kd = float(self.h_outer_kd)
         outer_integrator_max = float(self.i_outer_integrator_max)
+        outer_integrator_initial = float(self.i_outer_integrator_initial)
         update_interval = float(self.j_update_interval)
+        verbose = bool(self.k_verbose)
+
+        # Error check
+        if update_interval <= 0.0:
+            self.notify("PID Error", "Update interval must be positive", timeout=None, type="danger")
+            raise ValueError("PID - Update interval must be positive")
+        elif inner_integrator_max < 0.0:
+            self.notify("PID Error", "Inner loop max integrator must be >= 0", timeout=None, type="danger")
+            raise ValueError("PID - Inner loop max integrator must be >= 0")
+        elif abs(inner_integrator_max) < abs(inner_integrator_initial):
+            self.notify("PID Error", "Inner loop integrator initial value must be below the integrator max", timeout=None, type="danger")
+            raise ValueError("PID - Inner loop integrator initial value must be below the integrator max")
+        elif outer_integrator_max < 0.0:
+            self.notify("PID Error", "Outer loop max integrator must be >= 0", timeout=None, type="danger")
+            raise ValueError("PID - Outer loop max integrator must be >= 0")
+        elif abs(outer_integrator_max) < abs(outer_integrator_initial):
+            self.notify("PID Error", "Outer loop integrator initial value must be below the integrator max", timeout=None, type="danger")
+            raise ValueError("PID - Outer loop integrator initial value must be below the integrator max")
+        else:
+            self.heater_on(0.0)
 
         # Initialize PID cascade
         if cbpi.get_config_parameter("unit", "C") == "C":
-            outer_pid = PID(outer_kp, outer_ki, outer_kd, 0.0, 100.0, outer_integrator_max)
+            outer_pid = PID(outer_kp, outer_ki, outer_kd, 0.0, 100.0, outer_integrator_max, outer_integrator_initial)
         else:
-            outer_pid = PID(outer_kp, outer_ki, outer_kd, 32, 212, outer_integrator_max)
+            outer_pid = PID(outer_kp, outer_ki, outer_kd, 32, 212, outer_integrator_max, outer_integrator_initial)
 
-        inner_pid = PID(inner_kp, inner_ki, inner_kd, 0.0, 100.0, inner_integrator_max)
+        inner_pid = PID(inner_kp, inner_ki, inner_kd, 0.0, 100.0, inner_integrator_max, inner_integrator_max)
 
         while self.is_running():
             waketime = time.time() + update_interval
@@ -85,13 +99,14 @@ class CascadePID(KettleController):
             self.actor_power(inner_output)
 
             # Print loop details
-            print("[%s] Outer loop PID target/actual/output: %s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value))
-            print("[%s] Inner loop PID target/actual/output: %s/%s/%s" % (waketime, inner_target_value, inner_current_value, inner_output))
+            if verbose:
+                print("[%s] Outer loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value, round(outer_pid.integrator, 2)))
+                print("[%s] Inner loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, inner_target_value, inner_current_value, inner_output, round(inner_pid.integrator, 2)))
 
             # Sleep until update required again
-            if waketime <= time.time():
-                self.notify("PID Error", "Update interval is too short to complete calculations", timeout=None, type="danger")
-                raise ValueError("PID - Update interval is too short to complete CascadePID calculations")
+            if waketime <= time.time() + 0.25:
+                self.notify("PID Error", "Update interval is too short", timeout=None, type="danger")
+                raise ValueError("PID - Update interval is too short")
             else:
                 self.sleep(waketime - time.time())
 
@@ -104,34 +119,39 @@ class SinglePID(KettleController):
     d_output_max = Property.Number("Output max", True, 100.0)
     e_output_min = Property.Number("Output min", True, 0.0)
     f_integrator_max = Property.Number("Integrator max", True, 15.0, description=integrator_max_description)
+    f_integrator_initial = Property.Number("Integrator initial value", True, 0.0)
     g_update_interval = Property.Number("Update interval", True, 2.5, description=update_interval_description)
+    h_verbose = Property.Select("Verbose mode", ["True", "False"], description=verbose_description)
 
     def stop(self):
         self.heater_off()
         super(KettleController, self).stop()
 
     def run(self):
-        # Error check
-        if float(self.g_update_interval) <= 0.0:
-            self.notify("PID Error", "Update interval must be positive", timeout=None, type="danger")
-            raise ValueError("PID - Update interval must be positive")
-        elif float(self.f_integrator_max) < 0.0:
-            self.notify("PID Error", "Max integrator must be >= 0", timeout=None, type="danger")
-            raise ValueError("PID - Max integrator must be >= 0")
-        elif float(self.d_output_max) <= float(self.e_output_min):
-            self.notify("PID Error", "Output maxmimum must be greater than minimum", timeout=None, type="danger")
-            raise ValueError("PID - Output maxmimum must be greater than minimum")
-        else:
-            self.heater_on(0.0)
-
-        # Ensure all numerical properties are floats
         kp = float(self.a_kp)
         ki = float(self.b_ki)
         kd = float(self.c_kd)
         output_max = float(self.d_output_max)
         output_min = float(self.e_output_min)
         integrator_max = float(self.f_integrator_max)
+        integrator_initial = float(self.f_integrator_initial)
         update_interval = float(self.g_update_interval)
+
+        # Error check
+        if update_interval <= 0.0:
+            self.notify("PID Error", "Update interval must be positive", timeout=None, type="danger")
+            raise ValueError("PID - Update interval must be positive")
+        elif integrator_max < 0.0:
+            self.notify("PID Error", "Max integrator must be >= 0", timeout=None, type="danger")
+            raise ValueError("PID - Max integrator must be >= 0")
+        elif abs(integrator_max) < abs(integrator_initial):
+            self.notify("PID Error", "Integrator initial value must be below the integrator max", timeout=None, type="danger")
+            raise ValueError("PID - Integrator initial value must be below the integrator max")
+        elif output_max <= output_min:
+            self.notify("PID Error", "Output maxmimum must be greater than minimum", timeout=None, type="danger")
+            raise ValueError("PID - Output maxmimum must be greater than minimum")
+        else:
+            self.heater_on(0.0)
 
         # Initialize PID
         SinglePID = PID(kp, ki, kd, output_min, output_max, integrator_max)
@@ -150,18 +170,19 @@ class SinglePID(KettleController):
             self.actor_power(output)
 
             # Print details
-            print("[%s] PID target/actual/output: %s/%s/%s" % (waketime, target_value, current_value, output))
+            if verbose:
+                print("[%s] PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, target_value, current_value, output, round(SinglePID.integrator, 2)))
 
             # Sleep until update required again
-            if waketime <= time.time():
-                self.notify("PID Error", "Update interval is too short to complete calculations", timeout=None, type="danger")
-                raise ValueError("PID - Update interval is too short to complete calculations")
+            if waketime <= time.time() + 0.25:
+                self.notify("PID Error", "Update interval is too short", timeout=None, type="danger")
+                raise ValueError("PID - Update interval is too short")
             else:
                 self.sleep(waketime - time.time())
 
 
 class PID(object):
-    def __init__(self, kp, ki, kd, output_min, output_max, integrator_max):
+    def __init__(self, kp, ki, kd, output_min, output_max, integrator_max, integrator_initial):
         self.kp = kp
         self.ki = ki
         self.kd = kd
@@ -170,7 +191,7 @@ class PID(object):
         self.integrator_max = integrator_max
         self.last_time = 0.0
         self.last_error = 0.0
-        self.integrator = 0.0
+        self.integrator = integrator_initial
 
     def update(self, current, target):
         # Initialization iteration

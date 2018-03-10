@@ -32,8 +32,8 @@ The inner loop in a traditional HERMS brewery is the control loop for the temper
 The outer loop is the actual process variable you are interested in controlling. In the case of both RIMS and HERMS breweries, this is the mash temperature. The process variable in the outer loop is dependent upon the inner loop.
 
 ## Tuning
-Tuning of these systems is non-trivial, but not impossible. You should approach tuning a cascade control starting with the innermost loop.
+Tuning of these systems is non-trivial, but not impossible. You should approach tuning a cascade control starting with the innermost loop. The provided SinglePID KettleController can be used for these purposes, with the properties from a well tuned SinglePID KettleController copied over as the inner loop properties in a CascadePID KettleController.
 
-For many homebreweries, it is entirely sufficient to set the integral and derivative action parameters to 0 in the inner loop, as there should be minimal lag in this loop. As such, 0 is the default values of these parameters.
+For many homebreweries, it is sufficient to set the integral and derivative action parameters to 0 in the inner loop, as there should be minimal lag in this loop.
 
-Beyond this suggestion, tuning is responsibility of the user, and requires some knowledge of control systems.
+Some further information of the PID parameters is provided in their descriptions.

@@ -79,7 +79,7 @@ class CascadePID(KettleController):
         else:
             outer_pid = PID(outer_kp, outer_ki, outer_kd, 32, 212, outer_integrator_max, outer_integrator_initial)
 
-        inner_pid = PID(inner_kp, inner_ki, inner_kd, 0.0, 100.0, inner_integrator_max, inner_integrator_max)
+        inner_pid = PID(inner_kp, inner_ki, inner_kd, 0.0, 100.0, inner_integrator_max, inner_integrator_initial)
 
         while self.is_running():
             waketime = time.time() + update_interval
@@ -154,7 +154,7 @@ class SinglePID(KettleController):
             self.heater_on(0.0)
 
         # Initialize PID
-        SinglePID = PID(kp, ki, kd, output_min, output_max, integrator_max)
+        SinglePID = PID(kp, ki, kd, output_min, output_max, integrator_max, integrator_initial)
 
         while self.is_running():
             waketime = time.time() + update_interval

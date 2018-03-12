@@ -100,8 +100,8 @@ class CascadePID(KettleController):
 
             # Print loop details
             if verbose:
-                print("[%s] Outer loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value, round(outer_pid.integrator, 2)))
-                print("[%s] Inner loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, inner_target_value, inner_current_value, inner_output, round(inner_pid.integrator, 2)))
+                cbpi.app.logger.info("[%s] Outer loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value, round(outer_pid.integrator, 2)))
+                cbpi.app.logger.info("[%s] Inner loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, inner_target_value, inner_current_value, inner_output, round(inner_pid.integrator, 2)))
 
             # Sleep until update required again
             if waketime <= time.time() + 0.25:
@@ -171,7 +171,7 @@ class SinglePID(KettleController):
 
             # Print details
             if verbose:
-                print("[%s] PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, target_value, current_value, output, round(SinglePID.integrator, 2)))
+                cbpi.app.logger.info("[%s] PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, target_value, current_value, output, round(SinglePID.integrator, 2)))
 
             # Sleep until update required again
             if waketime <= time.time() + 0.25:

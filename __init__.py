@@ -10,7 +10,7 @@ ki_description = "The integral term, also known as ki, is the action of the PID 
 kd_description = "The derivative term, also known as kd, is the action of the PID in response to the rate of change of the error. kd is used primarily to reduce overshoot. \nThe units are of output / process variable / time (e.g. watts /°C / seconds)"
 integrator_max_description = "An integrator maximum is a simple method used to reduce integrator windup. Integrator windup is the rapid accumulation of error in the integrator from sudden changes in setpoints. This occurs when the calculated action exceeds output capabilities. Excessive overshoot can occur if integrator windup is not accounted for. \nThe integrator is in units of process variable • time (e.g. °C • seconds)."
 update_interval_description = "This is the length of time in seconds between recalculation of actor output with the PID algorithm."
-verbose_description = "This option prints information from PID loop to console. This is useful especially during the tuning process."
+notification_timeout_description = "Notification duration in milliseconds"
 
 @cbpi.controller
 class CascadePID(KettleController):
@@ -26,7 +26,7 @@ class CascadePID(KettleController):
     i_outer_integrator_max = Property.Number("Outer loop integrator max", True, 15.0, description=integrator_max_description)
     i_outer_integrator_initial = Property.Number("Outer loop integrator initial value", True, 0.0)
     j_update_interval = Property.Number("Update interval", True, 2.5, description=update_interval_description)
-    k_verbose = Property.Select("Verbose mode", ["True", "False"], description=verbose_description)
+    k_notification_timeout = Property.Number("Notification duration", True, 5000, description=notification_timeout_description)
 
     def stop(self):
         self.heater_off()
@@ -52,7 +52,8 @@ class CascadePID(KettleController):
         outer_integrator_max = float(self.i_outer_integrator_max)
         outer_integrator_initial = float(self.i_outer_integrator_initial)
         update_interval = float(self.j_update_interval)
-        verbose = bool(self.k_verbose)
+        notification_timeout = float(self.k_notification_timeout)
+
 
         # Error check
         if update_interval <= 0.0:
@@ -70,6 +71,9 @@ class CascadePID(KettleController):
         elif abs(outer_integrator_max) < abs(outer_integrator_initial):
             self.notify("PID Error", "Outer loop integrator initial value must be below the integrator max", timeout=None, type="danger")
             raise ValueError("PID - Outer loop integrator initial value must be below the integrator max")
+        elif notification_timeout < 0.0:
+            cbpi.notify("OneWire Error", "Notification timeout must be positive", timeout=None, type="danger")
+            raise ValueError("OneWire - Notification timeout must be positive")
         else:
             self.heater_on(0.0)
 
@@ -99,14 +103,13 @@ class CascadePID(KettleController):
             self.actor_power(inner_output)
 
             # Print loop details
-            if verbose:
-                cbpi.app.logger.info("[%s] Outer loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value, round(outer_pid.integrator, 2)))
-                cbpi.app.logger.info("[%s] Inner loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, inner_target_value, inner_current_value, inner_output, round(inner_pid.integrator, 2)))
+            cbpi.app.logger.info("[%s] Outer loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value, round(outer_pid.integrator, 2)))
+            cbpi.app.logger.info("[%s] Inner loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, inner_target_value, inner_current_value, inner_output, round(inner_pid.integrator, 2)))
 
             # Sleep until update required again
             if waketime <= time.time() + 0.25:
-                self.notify("PID Error", "Update interval is too short", timeout=None, type="danger")
-                raise ValueError("PID - Update interval is too short")
+                self.notify("PID Error", "Update interval is too short", timeout=notification_timeout, type="warning")
+                cbpi.app.logger.info("PID - Update interval is too short")
             else:
                 self.sleep(waketime - time.time())
 
@@ -121,7 +124,7 @@ class SinglePID(KettleController):
     f_integrator_max = Property.Number("Integrator max", True, 15.0, description=integrator_max_description)
     f_integrator_initial = Property.Number("Integrator initial value", True, 0.0)
     g_update_interval = Property.Number("Update interval", True, 2.5, description=update_interval_description)
-    h_verbose = Property.Select("Verbose mode", ["True", "False"], description=verbose_description)
+    h_notification_timeout = Property.Number("Notification duration", True, 5000, description=notification_timeout_description)
 
     def stop(self):
         self.heater_off()
@@ -136,6 +139,7 @@ class SinglePID(KettleController):
         integrator_max = float(self.f_integrator_max)
         integrator_initial = float(self.f_integrator_initial)
         update_interval = float(self.g_update_interval)
+        notification_timeout = float(self.h_notification_timeout)
 
         # Error check
         if update_interval <= 0.0:
@@ -150,6 +154,9 @@ class SinglePID(KettleController):
         elif output_max <= output_min:
             self.notify("PID Error", "Output maxmimum must be greater than minimum", timeout=None, type="danger")
             raise ValueError("PID - Output maxmimum must be greater than minimum")
+        elif notification_timeout <= 0.0:
+            cbpi.notify("OneWire Error", "Notification timeout must be positive", timeout=None, type="danger")
+            raise ValueError("OneWire - Notification timeout must be positive")
         else:
             self.heater_on(0.0)
 
@@ -169,14 +176,13 @@ class SinglePID(KettleController):
             # Update the heater power
             self.actor_power(output)
 
-            # Print details
-            if verbose:
-                cbpi.app.logger.info("[%s] PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, target_value, current_value, output, round(SinglePID.integrator, 2)))
+            # Log details
+            cbpi.app.logger.info("[%s] PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, target_value, current_value, output, round(SinglePID.integrator, 2)))
 
             # Sleep until update required again
             if waketime <= time.time() + 0.25:
-                self.notify("PID Error", "Update interval is too short", timeout=None, type="danger")
-                raise ValueError("PID - Update interval is too short")
+                self.notify("PID Error", "Update interval is too short", timeout=notification_timeout, type="warning")
+                cbpi.app.logger.info("PID - Update interval is too short")
             else:
                 self.sleep(waketime - time.time())
 

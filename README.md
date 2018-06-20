@@ -4,6 +4,8 @@ This CraftBeerPi 3.0 plugin provides a new KettleController type called CascadeP
 
 A SinglePID KettleController is also provided in this plugin.
 
+Both KettleControllers provided are to be used with a GPIOPWM actor for your heating element.
+
 ## Typical Usage
 Most brewers with HERMS or RIMS based breweries use trial and error to determine an appropriate differential between their mash temperature and hot liquor tank or RIMS tube temperature in order to maintain the set point. Especially for those who brew in non-temperature controlled environments, this can be inexact and tedious.
 

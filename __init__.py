@@ -412,7 +412,7 @@ class Hysteresis(object):
         
     def update(self, current, target):
         interval = time.time() - self.last_change
-        if (self.positive & current <= target) | (!self.positive & current >= target):
+        if (self.positive & current <= target) | (not(self.positive) & current >= target):
             if self.on:
                 if interval > self.on_max:
                     # Current ON time has exceeded ON time maximum
@@ -431,7 +431,7 @@ class Hysteresis(object):
                     # Turn ON, and update time of last change
                     self.last_change = time.time()
                     self.on = True
-        elif (self.positive & current > target) | (!self.positive & current < target):
+        elif (self.positive & current > target) | (not(self.positive) & current < target):
             if ON:
                 if interval < self.on_min:
                     # Current ON time has NOT exceeded minimum, so leave ON

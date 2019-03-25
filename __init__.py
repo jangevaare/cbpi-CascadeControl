@@ -286,28 +286,27 @@ class Hysteresis(KettleController):
             cbpi.notify("Hysteresis Error", "Notification timeout must be positive", timeout=None, type="danger")
             raise ValueError("Hysteresis - Notification timeout must be positive")
         else:
+            # Initialize hysteresis
+            hysteresis_on = Hysteresis(positive, on_min, on_max, off_min)
 
-        # Initialize hysteresis
-        hysteresis_on = Hysteresis(positive, on_min, on_max, off_min)
+            while self.is_running():
+                waketime = time.time() + update_interval
 
-        while self.is_running():
-            waketime = time.time() + update_interval
+                # Get the target temperature
+                current_value = self.get_temp()
+                target_value = self.get_target_temp()
 
-            # Get the target temperature
-            current_value = self.get_temp()
-            target_value = self.get_target_temp()
+                if hysteresis_on.update(current_value, target_value):
+                    self.heater_on(100)
+                else:
+                    self.heater_off()
 
-            if hysteresis_on.update(current_value, target_value):
-                self.heater_on(100)
-            else:
-                self.heater_off()
-
-            # Sleep until update required again
-            if waketime <= time.time() + 0.25:
-                self.notify("Hysteresis Error", "Update interval is too short", timeout=notification_timeout, type="warning")
-                cbpi.app.logger.info("Hysteresis - Update interval is too short")
-            else:
-                self.sleep(waketime - time.time())
+                # Sleep until update required again
+                if waketime <= time.time() + 0.25:
+                    self.notify("Hysteresis Error", "Update interval is too short", timeout=notification_timeout, type="warning")
+                    cbpi.app.logger.info("Hysteresis - Update interval is too short")
+                else:
+                    self.sleep(waketime - time.time())
 
 
 class PID(object):

@@ -353,7 +353,10 @@ class PID(object):
         # such that the maximum integrator alone could result in no 
         # more than 100% of the output. This can help limit excessive 
         # integrator wind up.
-        self.integrator_max = (output_max-output_min)/ki
+        if ki == 0.0:
+            self.integrator_max = 0.0
+        else:
+            self.integrator_max = abs((output_max-output_min)/ki)
         
         # Setting an error maximum for the integrator is an additional 
         # measure to prevent excessive integrator windup

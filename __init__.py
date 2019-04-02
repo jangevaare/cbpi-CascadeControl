@@ -5,13 +5,14 @@ from modules.core.controller import KettleController
 from modules.core.props import Property
 
 # Property descriptions
-kp_description = "The proportional term, also known as kp, is the action of PID in response to each unit of error. kp dictates the aggressiveness of action. \nThe units of kp are output / process variable (e.g. watts / °C)"
-ki_description = "The integral term, also known as ki, is the action of the PID in response to cumulative error in the system. ki is used primarily to reduce steady state error, but also factors into aggressivness of action. \nThe units of ki are output/(process variable • time) (e.g. watts / (°C • seconds))"
-kd_description = "The derivative term, also known as kd, is the action of the PID in response to the rate of change of the error. kd is used primarily to reduce overshoot. \nThe units are of output / process variable / time (e.g. watts /°C / seconds)"
+kp_description = "The proportional term, also known as kp, is the action of PID in response to each unit of error. kp dictates the aggressiveness of action. \nThe units of kp are output / process variable (e.g. % / °C)"
+ki_description = "The integral term, also known as ki, is the action of the PID in response to cumulative error in the system. ki is used primarily to reduce steady state error, but also factors into aggressivness of action. \nThe units of ki are output/(process variable • time) (e.g. % / (°C • seconds))"
+kd_description = "The derivative term, also known as kd, is the action of the PID in response to the rate of change of the error. kd is used primarily to reduce overshoot. \nThe units are of output / process variable / time (e.g. % /°C / seconds)"
 update_interval_description = "This is the length of time in seconds between recalculation of actor output with the PID algorithm."
 notification_timeout_description = "Notification duration in milliseconds"
 action_description = "Positive action results in the Actor being ON when current value of control variable is BELOW it's set point (e.g. heating). Negative action results in an Actor being OFF when the current value of the control variable is ABOVE it's setpoint (e.g. cooling)."
 maxset_description = "The maximum temperature that the outer loop can set as the target for the inner loop"
+maxoutput_description = "The maximum PWM output %"
 
 @cbpi.controller
 class CascadePID(KettleController):
@@ -24,12 +25,13 @@ class CascadePID(KettleController):
         f_maxset = Property.Number("Max inner loop target (°C)", True, 75, description=maxset_description)
     else:
         f_maxset = Property.Number("Max inner loop target (°F)", True, 168, description=maxset_description)
-    g_outer_kp = Property.Number("Outer loop proportional term", True, 5.0, description=kp_description)
-    h_outer_ki = Property.Number("Outer loop integral term", True, 2.0, description=ki_description)
-    i_outer_kd = Property.Number("Outer loop derivative term", True, 1.0, description=kd_description)
-    j_outer_integrator_initial = Property.Number("Outer loop integrator initial value", True, 0.0)
-    k_update_interval = Property.Number("Update interval (s)", True, 2.5, description=update_interval_description)
-    l_notification_timeout = Property.Number("Notification duration (ms)", True, 5000, description=notification_timeout_description)
+    g_maxoutput = Property.Number("Max inner loop output (%)", True, 100, description=maxoutput_description)
+    h_outer_kp = Property.Number("Outer loop proportional term", True, 5.0, description=kp_description)
+    i_outer_ki = Property.Number("Outer loop integral term", True, 2.0, description=ki_description)
+    j_outer_kd = Property.Number("Outer loop derivative term", True, 1.0, description=kd_description)
+    k_outer_integrator_initial = Property.Number("Outer loop integrator initial value", True, 0.0)
+    l_update_interval = Property.Number("Update interval (s)", True, 2.5, description=update_interval_description)
+    m_notification_timeout = Property.Number("Notification duration (ms)", True, 5000, description=notification_timeout_description)
 
     def stop(self):
         self.heater_off()
@@ -49,12 +51,13 @@ class CascadePID(KettleController):
         inner_kd = float(self.d_inner_kd)
         inner_integrator_initial = float(self.e_inner_integrator_initial)
         maxset = float(self.f_maxset)
-        outer_kp = float(self.g_outer_kp)
-        outer_ki = float(self.h_outer_ki)
-        outer_kd = float(self.i_outer_kd)
-        outer_integrator_initial = float(self.j_outer_integrator_initial)
-        update_interval = float(self.k_update_interval)
-        notification_timeout = float(self.l_notification_timeout)
+        maxoutput = min(float(self.g_maxoutput), 100.0)
+        outer_kp = float(self.h_outer_kp)
+        outer_ki = float(self.i_outer_ki)
+        outer_kd = float(self.j_outer_kd)
+        outer_integrator_initial = float(self.k_outer_integrator_initial)
+        update_interval = float(self.l_update_interval)
+        notification_timeout = float(self.m_notification_timeout)
 
         # Error check
         if update_interval <= 0.0:
@@ -63,6 +66,9 @@ class CascadePID(KettleController):
         elif notification_timeout <= 0.0:
             cbpi.notify("PID Error", "Notification timeout must be positive", timeout=None, type="danger")
             raise ValueError("PID - Notification timeout must be positive")
+        elif maxoutput < 5.0:
+            cbpi.notify("PID Error", "Notification timeout must be positive", timeout=None, type="danger")
+            raise ValueError("PID - Max output must be at least 5%")
         else:
             self.heater_on(0.0)
 
@@ -72,7 +78,7 @@ class CascadePID(KettleController):
         else:
             outer_pid = PID(outer_kp, outer_ki, outer_kd, 32, maxset, 1.8, outer_integrator_initial)
 
-        inner_pid = PID(inner_kp, inner_ki, inner_kd, 0.0, 100.0, 1.0, inner_integrator_initial)
+        inner_pid = PID(inner_kp, inner_ki, inner_kd, 0.0, maxoutput, 1.0, inner_integrator_initial)
 
         while self.is_running():
             waketime = time.time() + update_interval
@@ -97,7 +103,6 @@ class CascadePID(KettleController):
             print("[%s] Outer loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value, round(outer_pid.integrator, 2)))
             print("[%s] Inner loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, inner_target_value, inner_current_value, inner_output, round(inner_pid.integrator, 2)))
 
-
             # Sleep until update required again
             if waketime <= time.time() + 0.25:
                 self.notify("PID Error", "Update interval is too short", timeout=notification_timeout, type="warning")
@@ -112,9 +117,10 @@ class AdvancedPID(KettleController):
     a_kp = Property.Number("Proportional term", True, 10.0, description=kp_description)
     b_ki = Property.Number("Integral term", True, 2.0, description=ki_description)
     c_kd = Property.Number("Derivative term", True, 1.0, description=kd_description)
-    d_integrator_initial = Property.Number("Integrator initial value", True, 0.0)
-    e_update_interval = Property.Number("Update interval (s)", True, 2.5, description=update_interval_description)
-    f_notification_timeout = Property.Number("Notification duration (ms)", True, 5000, description=notification_timeout_description)
+    d_maxoutput = Property.Number("Max output (%)", True, 100, description=maxoutput_description)
+    e_integrator_initial = Property.Number("Integrator initial value", True, 0.0)
+    f_update_interval = Property.Number("Update interval (s)", True, 2.5, description=update_interval_description)
+    g_notification_timeout = Property.Number("Notification duration (ms)", True, 5000, description=notification_timeout_description)
 
     def stop(self):
         self.heater_off()
@@ -124,9 +130,10 @@ class AdvancedPID(KettleController):
         kp = float(self.a_kp)
         ki = float(self.b_ki)
         kd = float(self.c_kd)
-        integrator_initial = float(self.d_integrator_initial)
-        update_interval = float(self.e_update_interval)
-        notification_timeout = float(self.f_notification_timeout)
+        maxoutput = min(float(self.d_maxoutput), 100.0)
+        integrator_initial = float(self.e_integrator_initial)
+        update_interval = float(self.f_update_interval)
+        notification_timeout = float(self.g_notification_timeout)
 
         # Error check
         if update_interval <= 0.0:
@@ -135,11 +142,14 @@ class AdvancedPID(KettleController):
         elif notification_timeout <= 0.0:
             cbpi.notify("PID Error", "Notification timeout must be positive", timeout=None, type="danger")
             raise ValueError("PID - Notification timeout must be positive")
+        elif maxoutput < 5.0:
+            cbpi.notify("PID Error", "Notification timeout must be positive", timeout=None, type="danger")
+            raise ValueError("PID - Max output must be at least 5%")
         else:
             self.heater_on(0.0)
 
         # Initialize PID
-        SinglePID = PID(kp, ki, kd, 0.0, 100.0, 1.0, integrator_initial)
+        SinglePID = PID(kp, ki, kd, 0.0, maxoutput, 1.0, integrator_initial)
 
         while self.is_running():
             waketime = time.time() + update_interval

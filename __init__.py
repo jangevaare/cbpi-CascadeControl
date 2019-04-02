@@ -34,6 +34,7 @@ class CascadePID(KettleController):
     m_notification_timeout = Property.Number("Notification duration (ms)", True, 5000, description=notification_timeout_description)
 
     def stop(self):
+        self.actor_power(0.0)
         self.heater_off()
         super(KettleController, self).stop()
 
@@ -123,6 +124,7 @@ class AdvancedPID(KettleController):
     g_notification_timeout = Property.Number("Notification duration (ms)", True, 5000, description=notification_timeout_description)
 
     def stop(self):
+        self.actor_power(0.0)
         self.heater_off()
         super(KettleController, self).stop()
 

@@ -11,8 +11,9 @@ kd_description = "The derivative term, also known as kd, is the action of the PI
 update_interval_description = "This is the length of time in seconds between recalculation of actor output with the PID algorithm."
 notification_timeout_description = "Notification duration in milliseconds"
 action_description = "Positive action results in the Actor being ON when current value of control variable is BELOW it's set point (e.g. heating). Negative action results in an Actor being OFF when the current value of the control variable is ABOVE it's setpoint (e.g. cooling)."
-maxset_description = "The maximum temperature that the outer loop can set as the target for the inner loop"
-maxoutput_description = "The maximum PWM output %"
+minset_description = "The minimum temperature that the outer loop can set as the target for the inner loop. Suggested value is the lowest temperature for your typical mash profile"
+maxset_description = "The maximum temperature that the outer loop can set as the target for the inner loop. Suggested value is a typical mash out temperature"
+maxoutput_description = "The maximum PWM output %. For some directly heated mash systems the heating output is reduced during the mashing process to prevent scorching."
 
 @cbpi.controller
 class CascadePID(KettleController):
@@ -22,8 +23,10 @@ class CascadePID(KettleController):
     d_inner_kd = Property.Number("Inner loop derivative term", True, 0.0, description=kd_description)
     e_inner_integrator_initial = Property.Number("Inner loop integrator initial value", True, 0.0)
     if cbpi.get_config_parameter("unit", "C") == "C":
+        e_minset = Property.Number("Min inner loop target (°C)", True, 43, description=minset_description)
         f_maxset = Property.Number("Max inner loop target (°C)", True, 75, description=maxset_description)
     else:
+        e_minset = Property.Number("Min inner loop target (°F)", True, 109, description=minset_description)
         f_maxset = Property.Number("Max inner loop target (°F)", True, 168, description=maxset_description)
     g_maxoutput = Property.Number("Max inner loop output (%)", True, 100, description=maxoutput_description)
     h_outer_kp = Property.Number("Outer loop proportional term", True, 5.0, description=kp_description)
@@ -51,6 +54,7 @@ class CascadePID(KettleController):
         inner_ki = float(self.c_inner_ki)
         inner_kd = float(self.d_inner_kd)
         inner_integrator_initial = float(self.e_inner_integrator_initial)
+        minset = float(self.e_minset)
         maxset = float(self.f_maxset)
         maxoutput = min(float(self.g_maxoutput), 100.0)
         outer_kp = float(self.h_outer_kp)
@@ -75,9 +79,9 @@ class CascadePID(KettleController):
 
         # Initialize PID cascade
         if cbpi.get_config_parameter("unit", "C") == "C":
-            outer_pid = PID(outer_kp, outer_ki, outer_kd, 0.0, maxset, 1.0, outer_integrator_initial)
+            outer_pid = PID(outer_kp, outer_ki, outer_kd, minset, maxset, 1.0, outer_integrator_initial)
         else:
-            outer_pid = PID(outer_kp, outer_ki, outer_kd, 32, maxset, 1.8, outer_integrator_initial)
+            outer_pid = PID(outer_kp, outer_ki, outer_kd, minset, maxset, 1.8, outer_integrator_initial)
 
         inner_pid = PID(inner_kp, inner_ki, inner_kd, 0.0, maxoutput, 1.0, inner_integrator_initial)
 
@@ -178,7 +182,7 @@ class AdvancedPID(KettleController):
             else:
                 self.sleep(waketime - time.time())
 
-                
+
 @cbpi.controller
 class CascadeHysteresis(KettleController):
     aa_kp = Property.Number("Proportional term", True, 10.0, description=kp_description)
@@ -186,8 +190,10 @@ class CascadeHysteresis(KettleController):
     ac_kd = Property.Number("Derivative term", True, 1.0, description=kd_description)
     ad_integrator_initial = Property.Number("Integrator initial value", True, 0.0)
     if cbpi.get_config_parameter("unit", "C") == "C":
+        ad_minset = Property.Number("Min hysteresis target (°C)", True, 43, description=minset_description)
         ae_maxset = Property.Number("Max hysteresis target (°C)", True, 75, description=maxset_description)
     else:
+        ad_minset = Property.Number("Min hysteresis target (°F)", True, 109, description=minxset_description)
         ae_maxset = Property.Number("Max hysteresis target (°F)", True, 168, description=maxset_description)
     ba_inner_sensor = Property.Sensor(label="Inner (hysteresis) sensor")
     bb_action = Property.Select(label="Hysteresis Action Type", options=["Positive", "Negative"], description=action_description)
@@ -210,6 +216,7 @@ class CascadeHysteresis(KettleController):
         ki = float(self.ab_ki)
         kd = float(self.ac_kd)
         integrator_initial = float(self.ad_integrator_initial)
+        minset = float(self.ad_minset)
         maxset = float(self.ae_maxset)
 
         # Inner hysteresis settings
@@ -228,7 +235,7 @@ class CascadeHysteresis(KettleController):
             raise ValueError("Hysteresis - Minimum 'on time' must be positive")
         if on_max <= 0.0:
             self.notify("Hysteresis Error", "Maximum 'on time' must be positive", timeout=None, type="danger")
-            raise ValueError("Hysteresis - Maximum 'on time' must be positive")    
+            raise ValueError("Hysteresis - Maximum 'on time' must be positive")
         if on_min >= on_max:
             self.notify("Hysteresis Error", "Maximum 'on time' must be greater than the minimum 'on time'", timeout=None, type="danger")
             raise ValueError("Hysteresis - Maximum 'on time' must be greater than the minimum 'on time'")
@@ -244,9 +251,9 @@ class CascadeHysteresis(KettleController):
         else:
             # Initialize outer PID
             if cbpi.get_config_parameter("unit", "C") == "C":
-                outer_pid = PID(kp, ki, kd, 0.0, maxset, 1.0, integrator_initial)
+                outer_pid = PID(kp, ki, kd, minset, maxset, 1.0, integrator_initial)
             else:
-                outer_pid = PID(kp, ki, kd, 32, maxset, 1.8, integrator_initial)
+                outer_pid = PID(kp, ki, kd, minset, maxset, 1.8, integrator_initial)
 
             # Initialize hysteresis
             inner_hysteresis = Hysteresis(positive, on_min, on_max, off_min)
@@ -275,14 +282,14 @@ class CascadeHysteresis(KettleController):
                 # Print loop details
                 cbpi.app.logger.info("[%s] Outer loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value, round(outer_pid.integrator, 2)))
                 print("[%s] Outer loop PID target/actual/output/integrator: %s/%s/%s/%s" % (waketime, outer_target_value, outer_current_value, inner_target_value, round(outer_pid.integrator, 2)))
-                    
+
                 # Sleep until update required again
                 if waketime <= time.time() + 0.25:
                     self.notify("Hysteresis Error", "Update interval is too short", timeout=notification_timeout, type="warning")
                     cbpi.app.logger.info("Hysteresis - Update interval is too short")
                     print("Hysteresis - Update interval is too short")
                 else:
-                    self.sleep(waketime - time.time())       
+                    self.sleep(waketime - time.time())
 
 @cbpi.controller
 class AdvancedHysteresis(KettleController):
@@ -311,7 +318,7 @@ class AdvancedHysteresis(KettleController):
             raise ValueError("Hysteresis - Minimum 'on time' must be positive")
         if on_max <= 0.0:
             self.notify("Hysteresis Error", "Maximum 'on time' must be positive", timeout=None, type="danger")
-            raise ValueError("Hysteresis - Maximum 'on time' must be positive")    
+            raise ValueError("Hysteresis - Maximum 'on time' must be positive")
         if on_min >= on_max:
             self.notify("Hysteresis Error", "Maximum 'on time' must be greater than the minimum 'on time'", timeout=None, type="danger")
             raise ValueError("Hysteresis - Maximum 'on time' must be greater than the minimum 'on time'")
@@ -327,14 +334,14 @@ class AdvancedHysteresis(KettleController):
         else:
             # Initialize hysteresis
             hysteresis_on = Hysteresis(positive, on_min, on_max, off_min)
-            
+
             while self.is_running():
                 waketime = time.time() + update_interval
-                
+
                 # Get the target temperature
                 current_value = self.get_temp()
                 target_value = self.get_target_temp()
-                
+
                 if hysteresis_on.update(current_value, target_value):
                     self.heater_on(100)
                     cbpi.app.logger.info("[%s] Hysteresis actor stays ON" % (waketime))
@@ -343,7 +350,7 @@ class AdvancedHysteresis(KettleController):
                     self.heater_off()
                     cbpi.app.logger.info("[%s] Hysteresis actor stays OFF" % (waketime))
                     print("[%s] Hysteresis actor stays OFF" % (waketime))
-                
+
                 # Sleep until update required again
                 if waketime <= time.time() + 0.25:
                     self.notify("Hysteresis Error", "Update interval is too short", timeout=notification_timeout, type="warning")
@@ -360,20 +367,20 @@ class PID(object):
         self.kd = kd
         self.output_min = output_min
         self.output_max = output_max
-        
+
         # Set integrator maximum in relation to ki and output range
-        # such that the maximum integrator alone could result in no 
-        # more than 100% of the output. This can help limit excessive 
+        # such that the maximum integrator alone could result in no
+        # more than 100% of the output. This can help limit excessive
         # integrator wind up.
         if ki == 0.0:
             self.integrator_max = 0.0
         else:
             self.integrator_max = abs((output_max-output_min)/ki)
-        
-        # Setting an error maximum for the integrator is an additional 
+
+        # Setting an error maximum for the integrator is an additional
         # measure to prevent excessive integrator windup
         self.integrator_error_max = abs(integrator_error_max)
-        
+
         self.last_time = 0.0
         self.last_error = 0.0
 
@@ -389,10 +396,10 @@ class PID(object):
         if self.last_time == 0.0:
             self.last_time = time.time()
             current_error = target - current
-            
+
             # Update last_error
             self.last_error = current_error
-            
+
             # Return output
             return max(min(self.kp * current_error, self.output_max), self.output_min)
 
@@ -402,27 +409,27 @@ class PID(object):
             current_time = time.time()
             iteration_time = current_time - self.last_time
             self.last_time = current_time
-            
+
             # Calculate error
             current_error = target - current
-            
+
             # Calculate error for use with integratorwith respect to specified error limits
             integrator_error = max(min(current_error, self.integrator_error_max), -self.integrator_error_max)
-            
+
             # Update the integrator with respect to total integrator limits
             self.integrator = max(min(self.integrator + (integrator_error * iteration_time), self.integrator_max), -self.integrator_max)
-            
+
             # Calculate error derivative
             derivative = (current_error - self.last_error)/iteration_time
-            
+
             # Calculate output components
             p_action =  self.kp * current_error
             i_action = self.ki * self.integrator
             d_action = self.kd * derivative
-            
+
             # Update last_error
             self.last_error = current_error
-            
+
             # Return output
             return max(min(p_action + i_action + d_action, self.output_max), self.output_min)
 
@@ -436,25 +443,25 @@ class Hysteresis(object):
         # If positive is false, output will be ON when the control variable is
         # ABOVE the setpoint (i.e. cooling if controlling temperature)
         self.positive = positive
-        
+
         # The minimum and maximum time in seconds that an output should remain ON
         # This setting is intended to protect agaisnt scenarios which may lead to
         # excessive cycling of a compressor, etc. This overrides the buffer.
         self.on_min = on_min
         self.on_max = on_max
-        
+
         # The minimum time in seconds that an output should remain OFF
         # This setting is intended to protect agaisnt scenarios which may lead to
         # excessive cycling of a compressor, etc.
         self.off_min = off_min
-        
-        # To implement min/max on/off times, keep track of time of last change 
+
+        # To implement min/max on/off times, keep track of time of last change
         # in the output
         self.last_change = time.time()
-        
+
         # Record intended state
         self.on = False
-        
+
     def update(self, current, target):
         interval = time.time() - self.last_change
         if (self.positive & (current <= target)) | (not(self.positive) & (current >= target)):
@@ -489,5 +496,4 @@ class Hysteresis(object):
             else:
                 # Leave OFF
                 self.on = False
-        return self.on 
-               
+        return self.on

@@ -1,4 +1,4 @@
-# As of May 22, 2019 this plugin is no longer being developed or maintained, and this repository has been archived.
+# Notice: as of May 22, 2019 this plugin is no longer being developed or maintained. For my recent work with brewery control software, please see my open-source brewing dashboard, [brew2](https://github.com/jangevaare/brew2).
 
 ## cbpi-CascadeControl
 ### Introduction
